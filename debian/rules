@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on debugging for debhelper.
+# export DH_VERBOSE=1
+
+# This is the debhelper compatibility version.
+export DH_COMPAT=13
+
+# This is the package name.
+PACKAGE = country-block
+
+# Directories for installation
+SBIN_DIR = /usr/sbin
+ETC_DIR = /etc/country-block
+CACHE_DIR = /var/cache/country-block
+SYSTEMD_DIR = /lib/systemd/system
+PREFIX = /usr
+
+# Script and file names
+APPLY_SCRIPT = country-block-apply
+UPDATE_SCRIPT = country-block-update
+CONFIG_FILE = config.conf.example
+SERVICE_FILE = country-block.service
+CRON_WEEKLY_FILE = country-block
+CRON_WEEKLY_TARGET_DIR = /etc/cron.weekly
+CONFIG_TARGET_FILE = $(ETC_DIR)/config.conf
+
+# Metadata for rules (used in maintainer scripts)
+IPTABLES_COMMENT = country-block-rule
+IPSET_PREFIX = country_
+
+# Build system (none, as it's just scripts)
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Create necessary directories
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(ETC_DIR)
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(CACHE_DIR)
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)
+
+	# Install service and cron files from templates with placeholder replacement
+	sed "s|@PREFIX@|$(PREFIX)|g" country-block.service.template > $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(SERVICE_FILE)
+	sed "s|@PREFIX@|$(PREFIX)|g" country-block.cron.weekly.template > $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)/$(CRON_WEEKLY_FILE)
+
+	# Set permissions for the installed files
+	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(SERVICE_FILE)
+	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)/$(CRON_WEEKLY_FILE)
+
+	# Install scripts
+	install -m 755 $(APPLY_SCRIPT) $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)/
+	install -m 755 $(UPDATE_SCRIPT) $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)/
+
+	# Install example configuration file as conffile
+	install -m 644 $(CONFIG_FILE) $(CURDIR)/debian/$(PACKAGE)/$(CONFIG_TARGET_FILE)
+
+	# Install README.md as documentation
+	install -d $(CURDIR)/debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)
+	install -m 644 README.md $(CURDIR)/debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)/
+	install -m 644 debian/copyright $(CURDIR)/debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)/
+	gzip -9n $(CURDIR)/debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)/README.md
+
+override_dh_installchangelogs:
+	dh_installchangelogs
+
+override_dh_installman:
+	# No man pages, so override to do nothing
+	true
+
+override_dh_installdocs:
+	# Documentation handled in override_dh_auto_install
+	true

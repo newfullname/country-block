@@ -1,0 +1,12 @@
+Source: country-block
+Section: net
+Priority: optional
+Maintainer: Name <email>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: http://github.com/newfullname/country-block.git
+
+Package: country-block
+Architecture: all
+Depends: ${misc:Depends}, ipset, iptables, curl, bash, coreutils, sed, systemd, cron
+Description: Scripts to block incoming and/or outgoing network traffic from specified countries.

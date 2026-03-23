@@ -1,0 +1,35 @@
+#!/bin/sh
+
+set -e
+
+# Manually stop and disable the systemd service since --with systemd was removed from dh.
+if [ -x "/bin/systemctl" ]; then
+    systemctl stop country-block.service >/dev/null || true
+    systemctl disable country-block.service >/dev/null || true
+fi
+
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    # Clean up iptables rules and ipsets
+    # This logic is adapted from the original Makefile's uninstall target
+    IPTABLES_COMMENT="country-block-rule"
+    IPSET_PREFIX="country_"
+
+    # Remove iptables rules
+    iptables-save | grep -- "-m comment --comment $IPTABLES_COMMENT" | while read -r rule; do
+        del_rule=$(echo "$rule" | sed "s/^-A/-D/");
+        iptables $del_rule 2>/dev/null || true;
+    done || true
+
+    # Remove ip6tables rules
+    ip6tables-save | grep -- "-m comment --comment $IPTABLES_COMMENT" | while read -r rule; do
+        del_rule=$(echo "$rule" | sed "s/^-A/-D/");
+        ip6tables $del_rule 2>/dev/null || true;
+    done || true
+
+    # Destroy all country ipsets
+    for ipset_name in $(ipset list -n | grep "^$IPSET_PREFIX"); do
+        ipset destroy "$ipset_name" 2>/dev/null || true;
+    done
+fi
+
+exit 0

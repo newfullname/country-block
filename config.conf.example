@@ -1,0 +1,13 @@
+#
+# Configuration for country-based traffic blocking.
+# This is an example file. Add the country codes you wish to block.
+#
+# Format: <country-codes> <chains> <ip-versions>
+#
+# <country-codes>: Comma-separated list of two-letter country codes (e.g., ru,ir,cn)
+# <chains>: Comma-separated list of chains: input, output, forward, or * for all
+# <ip-versions>: Comma-separated list: v4, v6, or * for both
+#
+# Examples:
+# ru,ir * *
+# cn input v4

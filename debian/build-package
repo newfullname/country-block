@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# get current script folder
+PREFIX=$(dirname "$0")
+
+# Get package version
+VERSION=$(dpkg-parsechangelog --show-field Version)
+
+# Delete already built package in parent dir with exactly same version
+rm -rf "$PREFIX/../country-block_${VERSION}_all.deb"
+
+# Delete leftovers
+rm -rf "${PREFIX}/country-block"
+
+# Build
+dpkg-buildpackage -us -uc

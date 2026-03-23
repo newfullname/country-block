@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply country-based firewall rules from persistent cache
+After=network-online.target
+Wants=network-online.target
+DefaultDependencies=no
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=@PREFIX@/sbin/country-block-apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

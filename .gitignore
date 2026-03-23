@@ -1,0 +1,43 @@
+# Debian/Ubuntu specific
+*.deb
+*.udeb
+*.diff
+*.dsc
+*.tar.gz
+*.tar.xz
+*.build
+*.changes
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Common build artifacts
+/build/
+/dist/
+/bin/
+/obj/
+
+# Editor/IDE specific
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Configuration files that might be user-specific
+config.conf
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# debian build
+debian/.debhelper/
+debian/country-block.postrm.debhelper
+debian/country-block.substvars
+debian/country-block/
+debian/debhelper-build-stamp
+debian/files
