@@ -21,7 +21,7 @@ CONFIG_TARGET_FILE := $(ETC_DIR)/config.conf
 IPSET_PREFIX := country_
 IPTABLES_COMMENT := country-block-rule
 
-.PHONY: all install uninstall clean help $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
+.PHONY: all install uninstall clean deb help $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
 
 all: help
 
@@ -37,6 +37,8 @@ help:
 	@echo "Targets:"
 	@echo "  install      Install the country-block scripts, service, and config."
 	@echo "  uninstall    Remove all components of the country-block system."
+	@echo "  clean        Remove generated files and Debian package build artifacts."
+	@echo "  deb          Build the Debian binary package."
 	@echo ""
 
 install: $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
@@ -142,3 +144,23 @@ uninstall:
 	@echo ""
 	@echo "Uninstallation complete."
 	@echo ""
+
+clean:
+	@echo "Cleaning generated files..."
+	@rm -f "$(SERVICE_FILE)" "$(UPDATE_SERVICE_FILE)"
+	@if command -v dh_clean >/dev/null 2>&1; then \
+		dh_clean; \
+	else \
+		echo "debhelper is not installed; removing known Debian build artifacts."; \
+		rm -rf debian/.debhelper \
+			debian/country-block \
+			debian/debhelper-build-stamp \
+			debian/files \
+			debian/*.debhelper \
+			debian/*.substvars \
+			debian/*.debhelper.log; \
+	fi
+	@echo "Clean complete."
+
+deb:
+	debuild -us -uc -b
