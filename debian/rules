@@ -1,11 +1,5 @@
 #!/usr/bin/make -f
 
-# Uncomment this to turn on debugging for debhelper.
-# export DH_VERBOSE=1
-
-# This is the debhelper compatibility version.
-export DH_COMPAT=13
-
 # This is the package name.
 PACKAGE = country-block
 

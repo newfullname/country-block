@@ -1,8 +1,8 @@
 Source: country-block
 Section: net
 Priority: optional
-Maintainer: Name <email>
-Build-Depends: debhelper-compat (= 13)
+Maintainer: Nik Unknown <266516374+newfullname@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 12)
 Standards-Version: 4.6.0
 Homepage: http://github.com/newfullname/country-block.git
 
