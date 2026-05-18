@@ -2,31 +2,14 @@
 
 set -e
 
-if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    # Remove systemd service file
-    rm -f "/lib/systemd/system/country-block.service" || true
-    systemctl daemon-reload || true
-
-    # Remove cron job file
-    rm -f "/etc/cron.weekly/country-block" || true
-
-    # Remove cache directory
+if [ "$1" = "purge" ]; then
+    # Remove runtime cache data created by the update script.
     rm -rf "/var/cache/country-block" || true
-
-    # Handle configuration file
-    # Remove it only when it still matches the default shipped config.
-    CONFIG_TARGET_FILE="/etc/country-block/config.conf"
-    DEFAULT_CONFIG_HASH="8be898f9c7e9c4ef1779153d91e3163f99a5e68d4b1f9823ff59ab468da56703"
-
-    if [ -f "$CONFIG_TARGET_FILE" ]; then
-        file_hash=$(sha256sum "$CONFIG_TARGET_FILE" | cut -d' ' -f1)
-        if [ "$file_hash" = "$DEFAULT_CONFIG_HASH" ]; then
-            rm -f "$CONFIG_TARGET_FILE" || true
-        fi
-    fi
 
     # Remove configuration directory if empty
     rmdir --ignore-fail-on-non-empty "/etc/country-block" 2>/dev/null || true
 fi
+
+#DEBHELPER#
 
 exit 0

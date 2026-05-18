@@ -2,12 +2,6 @@
 
 set -e
 
-# Manually stop and disable the systemd service since --with systemd was removed from dh.
-if [ -x "/bin/systemctl" ]; then
-    systemctl stop country-block.service >/dev/null || true
-    systemctl disable country-block.service >/dev/null || true
-fi
-
 if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
     # Clean up iptables rules and ipsets
     # This logic is adapted from the original Makefile's uninstall target
@@ -31,5 +25,7 @@ if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
         ipset destroy "$ipset_name" 2>/dev/null || true;
     done
 fi
+
+#DEBHELPER#
 
 exit 0

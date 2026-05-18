@@ -1,6 +1,9 @@
 #
 # Configuration for country-based traffic blocking.
 # This is an example file. Add the country codes you wish to block.
+# Use this configuration at your own risk. Firewall rules can lock you out,
+# interrupt legitimate traffic, or break services if they are too broad.
+# Review the generated rules before applying them, especially on remote hosts.
 #
 # Format: <country-codes> <chains> <ip-versions>
 #

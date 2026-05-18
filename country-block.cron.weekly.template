@@ -1,7 +1,0 @@
-#!/bin/sh
-
-/usr/bin/bash @PREFIX@/sbin/country-block-update
-
-echo "Finished executing weekly job via @PREFIX@/sbin/country-block-update"
-
-exit 0

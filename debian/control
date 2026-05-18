@@ -8,5 +8,12 @@ Homepage: http://github.com/newfullname/country-block.git
 
 Package: country-block
 Architecture: all
-Depends: ${misc:Depends}, ipset, iptables, curl, bash, coreutils, sed, systemd, cron
-Description: Scripts to block incoming and/or outgoing network traffic from specified countries.
+Depends: ${misc:Depends}, ipset, iptables, curl
+Description: block network traffic by country
+ Country Block maintains ipset sets from country IP block lists and applies
+ iptables and ip6tables rules for the configured countries, chains, and IP
+ versions.
+ .
+ The package installs a command-line helper, a persistent systemd service for
+ restoring firewall rules, and scheduled refresh jobs for keeping country lists
+ current.

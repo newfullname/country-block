@@ -1,0 +1,55 @@
+.TH COUNTRY-BLOCK 8 "March 2026" "country-block" "System Administration"
+.SH NAME
+country-block \- manage country-based firewall blocking
+.SH SYNOPSIS
+.B country-block
+.I command
+.SH DESCRIPTION
+.B country-block
+maintains ipsets from country IP block lists and applies iptables and
+ip6tables rules based on
+.IR /etc/country-block/config.conf .
+.PP
+The command must be run as root when changing firewall state.
+.SH COMMANDS
+.TP
+.B apply
+Restore cached ipsets from
+.I /var/cache/country-block/ipsets.save
+and apply firewall rules from the configuration file.
+.TP
+.B update
+Download current country IP block lists for the configured countries, update
+the matching ipsets, save the resulting ipset state, and run
+.BR "country-block apply" .
+.SH SYSTEMD UNITS
+.TP
+.B country-block.service
+Runs
+.B country-block apply
+during boot to restore cached ipsets and firewall rules. It is enabled by
+default when the package is installed.
+.TP
+.B country-block.timer
+Runs weekly and triggers
+.BR country-block-update.service .
+It is enabled and started by default when the package is installed.
+.TP
+.B country-block-update.service
+Oneshot helper used by
+.BR country-block.timer .
+It runs
+.B country-block update
+and is not enabled directly.
+.SH FILES
+.TP
+.I /etc/country-block/config.conf
+Country, chain, and IP-version configuration.
+.TP
+.I /var/cache/country-block/
+Downloaded country lists and saved ipset state.
+.SH SEE ALSO
+.BR ipset (8),
+.BR iptables (8),
+.BR ip6tables (8),
+.BR curl (1)

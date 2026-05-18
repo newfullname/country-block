@@ -1,3 +1,11 @@
+country-block (0.2.0) unstable; urgency=medium
+
+  * Replace separate apply/update scripts with the country-block subcommand CLI.
+  * Use a systemd timer for scheduled updates instead of cron.
+  * Fix Debian packaging metadata and lintian issues.
+
+ -- Nik Unknown <266516374+newfullname@users.noreply.github.com>  Mon, 18 May 2026 21:28:06 +0300
+
 country-block (0.1.0) unstable; urgency=medium
 
   * Initial release.

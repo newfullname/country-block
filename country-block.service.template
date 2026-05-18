@@ -7,7 +7,7 @@ Before=network-pre.target
 
 [Service]
 Type=oneshot
-ExecStart=@PREFIX@/sbin/country-block-apply
+ExecStart=@PREFIX@/sbin/country-block apply
 RemainAfterExit=yes
 
 [Install]

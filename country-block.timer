@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh country-block IP sets weekly
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=country-block-update.service
+
+[Install]
+WantedBy=timers.target

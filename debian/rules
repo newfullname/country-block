@@ -7,17 +7,17 @@ PACKAGE = country-block
 SBIN_DIR = /usr/sbin
 ETC_DIR = /etc/country-block
 CACHE_DIR = /var/cache/country-block
-SYSTEMD_DIR = /lib/systemd/system
+SYSTEMD_DIR = /usr/lib/systemd/system
 PREFIX = /usr
 
 # Script and file names
-APPLY_SCRIPT = country-block-apply
-UPDATE_SCRIPT = country-block-update
+CLI_SCRIPT = country-block
 CONFIG_FILE = config.conf.example
 SERVICE_FILE = country-block.service
-CRON_WEEKLY_FILE = country-block
-CRON_WEEKLY_TARGET_DIR = /etc/cron.weekly
+UPDATE_SERVICE_FILE = country-block-update.service
+UPDATE_TIMER_FILE = country-block.timer
 CONFIG_TARGET_FILE = $(ETC_DIR)/config.conf
+MAN_DIR = /usr/share/man/man8
 
 # Metadata for rules (used in maintainer scripts)
 IPTABLES_COMMENT = country-block-rule
@@ -33,19 +33,21 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/$(PACKAGE)/$(ETC_DIR)
 	install -d $(CURDIR)/debian/$(PACKAGE)/$(CACHE_DIR)
 	install -d $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)
-	install -d $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)
+	install -d $(CURDIR)/debian/$(PACKAGE)/$(MAN_DIR)
 
-	# Install service and cron files from templates with placeholder replacement
+	# Install systemd units from templates with placeholder replacement
 	sed "s|@PREFIX@|$(PREFIX)|g" country-block.service.template > $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(SERVICE_FILE)
-	sed "s|@PREFIX@|$(PREFIX)|g" country-block.cron.weekly.template > $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)/$(CRON_WEEKLY_FILE)
+	sed "s|@PREFIX@|$(PREFIX)|g" country-block-update.service.template > $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(UPDATE_SERVICE_FILE)
+	install -m 644 country-block.timer $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(UPDATE_TIMER_FILE)
 
 	# Set permissions for the installed files
 	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(SERVICE_FILE)
-	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(CRON_WEEKLY_TARGET_DIR)/$(CRON_WEEKLY_FILE)
+	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(UPDATE_SERVICE_FILE)
+	chmod 644 $(CURDIR)/debian/$(PACKAGE)/$(SYSTEMD_DIR)/$(UPDATE_TIMER_FILE)
 
 	# Install scripts
-	install -m 755 $(APPLY_SCRIPT) $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)/
-	install -m 755 $(UPDATE_SCRIPT) $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)/
+	install -m 755 $(CLI_SCRIPT) $(CURDIR)/debian/$(PACKAGE)/$(SBIN_DIR)/
+	install -m 644 debian/country-block.8 $(CURDIR)/debian/$(PACKAGE)/$(MAN_DIR)/
 
 	# Install example configuration file as conffile
 	install -m 644 $(CONFIG_FILE) $(CURDIR)/debian/$(PACKAGE)/$(CONFIG_TARGET_FILE)
@@ -60,8 +62,7 @@ override_dh_installchangelogs:
 	dh_installchangelogs
 
 override_dh_installman:
-	# No man pages, so override to do nothing
-	true
+	dh_installman
 
 override_dh_installdocs:
 	# Documentation handled in override_dh_auto_install
