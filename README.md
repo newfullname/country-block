@@ -1,6 +1,6 @@
 # Country Block
 
-> **Warning:** This version is in development and not intended for use in production environments.
+> **Warning:** This version is in development and not intended for use in production environments. Use this package at your own risk. It changes firewall rules and can affect network access.
 
 Scripts to block incoming and/or outgoing network traffic from specified countries on Linux systems.
 
@@ -17,10 +17,17 @@ IP lists are sourced from IPdeny:
 -   **Efficient IP Management**: Uses `ipset` to handle thousands of IP ranges without slowing down `iptables`.
 -   **Persistent**: Firewall rules and IP sets are correctly restored after a system reboot.
 -   **Automatic Updates**: Includes a systemd timer to automatically update IP lists weekly.
--   **Clean Uninstall**: A `make uninstall` command is provided to cleanly remove all rules, files, and services.
--   **Safe Rule Management**: `iptables` rules are managed using a unique comment, ensuring that this system does not interfere with other firewall rules.
 
-## Prerequisites
+## Debian Package
+
+Debian package installation instructions are available at:
+https://newfullname.github.io/debian/country-block.html
+
+## Local Source Installation
+
+The following prerequisites and installation steps are for installing from a local clone of this repository.
+
+### Prerequisites
 
 Ensure the following packages are installed on your system.
 
@@ -37,7 +44,7 @@ Install them using your distribution's package manager, for example:
 - Fedora/RHEL: `sudo dnf install ipset iptables curl`
 - Arch: `sudo pacman -S ipset iptables curl`
 
-## Installation
+### Installation
 
 ```bash
 git clone https://github.com/newfullname/country-block.git
@@ -54,7 +61,7 @@ This will:
 
 ## Configuration
 
-After installation, you must configure which countries you want to block.
+After installation, configure which countries you want to block.
 
 1.  **Edit the configuration file:**
     ```bash
@@ -78,13 +85,13 @@ cn input v4
 
 ## Usage
 
-Once you have added your rules to the configuration file, you need to run the update script for the first time to download the IP lists and apply the rules.
+Once you have added your rules to the configuration file, run the update command for the first time to download the IP lists and apply the rules.
 
 ```bash
-sudo /usr/local/sbin/country-block update
+sudo country-block update
 ```
 
-The first execution downloads the latest country lists, updates the ipsets, and applies the matching firewall rules. Subsequent updates are handled automatically by `country-block.timer`; rerun `sudo /usr/local/sbin/country-block update` if you change `/etc/country-block/config.conf` and need to push the new rules immediately.
+The first execution downloads the latest country lists, updates the ipsets, and applies the matching firewall rules. Subsequent updates are handled automatically by `country-block.timer`; rerun `sudo country-block update` if you change the configuration and need to push the new rules immediately.
 
 ## Systemd Units
 
