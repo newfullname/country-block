@@ -1,6 +1,6 @@
 # Country Block
 
-> **Warning:** This version is in development and not intended for use in production environments. Use this package at your own risk. It changes firewall rules and can affect network access.
+> **Warning:** This version is in development and not intended for use in production environments. Use this package at your own risk. It changes firewall rules and can affect network access. For interactive changes, prefer `sudo country-block edit` so new rules are tested temporarily before they become persistent.
 
 Scripts to block incoming and/or outgoing network traffic from specified countries on Linux systems.
 
@@ -17,6 +17,7 @@ IP lists are sourced from IPdeny:
 -   **Efficient IP Management**: Uses `ipset` to handle thousands of IP ranges without slowing down `iptables`.
 -   **Persistent**: Firewall rules and IP sets are correctly restored after a system reboot.
 -   **Automatic Updates**: Includes a systemd timer to automatically update IP lists weekly.
+-   **Safe Editing**: Test configuration changes temporarily before making them persistent.
 
 ## Debian and Ubuntu Installation
 
@@ -76,11 +77,11 @@ This will:
 
 ## Configuration
 
-After installation, configure which countries you want to block.
+After installation, configure which countries you want to block. For remote machines, prefer the safe editor because it tests the new rules before replacing the persistent config.
 
 1.  **Edit the configuration file:**
     ```bash
-    sudo nano /etc/country-block/config.conf
+    sudo country-block edit
     ```
 
 2. **Add your rules.** The format is `<country-codes> <chains> <ip-versions>`.
@@ -107,6 +108,30 @@ sudo country-block update
 ```
 
 The first execution downloads the latest country lists, updates the ipsets, and applies the matching firewall rules. Subsequent updates are handled automatically by `country-block.timer`; rerun `sudo country-block update` if you change the configuration and need to push the new rules immediately.
+
+### Safe Changes
+
+Use `edit` for interactive configuration changes:
+
+```bash
+sudo country-block edit
+```
+
+The command opens a temporary copy of `/etc/country-block/config.conf` with `${EDITOR:-vi}`, prepares any missing country ipsets, applies the edited rules temporarily, and asks you to type `yes` within 120 seconds. If you confirm, the temporary file is installed as the persistent config. If you disconnect, press Ctrl-C, or do not confirm in time, the previous firewall state is restored and the persistent config is left unchanged.
+
+You can change the confirmation window:
+
+```bash
+sudo country-block edit --timeout 300
+```
+
+For generated configs or automation, use `try` directly:
+
+```bash
+sudo country-block try --config ./candidate.conf --timeout 120
+```
+
+`apply` remains a direct non-interactive command. It is intended for systemd and for administrators who explicitly want to apply the current persistent config immediately.
 
 ## Systemd Units
 

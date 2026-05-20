@@ -9,10 +9,12 @@ readonly CACHE_DIR="/var/cache/country-block"
 readonly IPSET_SAVE_FILE="${CACHE_DIR}/ipsets.save"
 readonly IPSET_PREFIX="country_"
 readonly IPTABLES_COMMENT="country-block-rule"
+readonly IPTABLES_TRY_COMMENT="country-block-try"
 readonly IP_SOURCE_URL="https://www.ipdeny.com/ipblocks/data/countries"
 readonly IP6_SOURCE_URL="https://www.ipdeny.com/ipv6/ipaddresses/blocks"
 readonly MAX_FILE_AGE_DAYS=7
 readonly LOCK_FILE="/var/lock/country-block.lock"
+readonly DEFAULT_TRY_TIMEOUT=120
 
 COMMAND_NAME="country-block"
 
@@ -23,12 +25,14 @@ Usage: country-block <command>
 Commands:
   apply   Restore cached ipsets and apply firewall rules
   update  Download country lists, update ipsets, and apply firewall rules
+  try     Temporarily apply a candidate config and keep it only after confirmation
+  edit    Edit a temporary config and try it before installing it
 EOF
 }
 
 log() {
 	echo -e "[ ${BLUE}${COMMAND_NAME}${NC} ] $1"
-	logger -t "${COMMAND_NAME}" "$1"
+	logger -t "${COMMAND_NAME}" "$1" 2>/dev/null || true
 }
 
 sanitize_config_line() {
@@ -120,65 +124,70 @@ acquire_lock() {
 	fi
 }
 
+validate_timeout() {
+	local timeout="$1"
+	if [[ ! "${timeout}" =~ ^[0-9]+$ ]] || [[ "${timeout}" -lt 1 ]]; then
+		log "ERROR: Timeout must be a positive integer number of seconds."
+		return 1
+	fi
+}
+
+promote_config() {
+	local candidate_config="$1"
+	local config_dir
+	local tmp_config
+
+	config_dir="$(dirname "${CONFIG_FILE}")"
+	mkdir -p "${config_dir}"
+	tmp_config="$(mktemp "${config_dir}/config.conf.XXXXXX")"
+	cp "${candidate_config}" "${tmp_config}"
+	chown root:root "${tmp_config}"
+	chmod 0644 "${tmp_config}"
+	mv "${tmp_config}" "${CONFIG_FILE}"
+	log "Installed confirmed config to ${CONFIG_FILE}."
+}
+
 read_config_lines() {
+	local config_file="$1"
 	config_lines=()
 	while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
 		sanitized_line="$(sanitize_config_line "${raw_line}")"
 		if [[ -n "${sanitized_line}" ]]; then
 			config_lines+=("${sanitized_line}")
 		fi
-	done < "${CONFIG_FILE}"
+	done < "${config_file}"
 }
 
-apply_main() {
-	COMMAND_NAME="country-block apply"
+cleanup_firewall_rules() {
+	local comment="$1"
 
-	if [[ "${EUID}" -ne 0 ]]; then
-		log "ERROR: This command must be run as root."
-		return 1
-	fi
-
-	if [[ -z "${COUNTRY_BLOCK_SKIP_LOCK:-}" ]]; then
-		acquire_lock
-	fi
-
-	log "Starting application of firewall rules..."
-
-	log "Attempting to restore ipsets from save file..."
-	if [[ -f "${IPSET_SAVE_FILE}" ]]; then
-		if ipset restore -exist < "${IPSET_SAVE_FILE}"; then
-			log "Successfully restored ipsets."
-		else
-			log "ERROR: Failed to restore ipsets from ${IPSET_SAVE_FILE}. File might be corrupt."
-			return 1
-		fi
-	else
-		log "File not found at ${IPSET_SAVE_FILE}. Exiting."
-		return 0
-	fi
-
-	log "Cleaning up old firewall rules..."
 	while read -r rule; do
 		del_rule=$(echo "${rule}" | sed "s/^-A/-D/")
 		# shellcheck disable=SC2086
 		iptables ${del_rule}
-	done < <(iptables-save | grep -- "-m comment --comment ${IPTABLES_COMMENT}") || true
+	done < <(iptables-save | grep -- "-m comment --comment ${comment}") || true
 
 	while read -r rule; do
 		del_rule=$(echo "${rule}" | sed "s/^-A/-D/")
 		# shellcheck disable=SC2086
 		ip6tables ${del_rule}
-	done < <(ip6tables-save | grep -- "-m comment --comment ${IPTABLES_COMMENT}") || true
+	done < <(ip6tables-save | grep -- "-m comment --comment ${comment}") || true
+}
 
-	if [[ ! -f "${CONFIG_FILE}" ]]; then
-		log "ERROR: Configuration file not found at ${CONFIG_FILE}. No rules will be applied."
+apply_config_rules() {
+	local config_file="$1"
+	local comment="$2"
+	local mode_label="$3"
+
+	if [[ ! -f "${config_file}" ]]; then
+		log "ERROR: Configuration file not found at ${config_file}. No rules will be applied."
 		return 1
 	fi
 
 	declare -a config_lines
-	read_config_lines
+	read_config_lines "${config_file}"
 
-	log "Applying new rules from ${CONFIG_FILE}..."
+	log "Applying ${mode_label} rules from ${config_file}..."
 	for line in "${config_lines[@]}"; do
 		if ! parse_config_entry "${line}"; then
 			continue
@@ -193,16 +202,16 @@ apply_main() {
 							case "${chain}" in
 								input)
 									log "Applying INPUT rule for IPv4 ipset: ${ipset_name}"
-									iptables -I INPUT 1 -m set --match-set "${ipset_name}" src -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									iptables -I INPUT 1 -m set --match-set "${ipset_name}" src -m comment --comment "${comment}" -j DROP
 									;;
 								output)
 									log "Applying OUTPUT rule for IPv4 ipset: ${ipset_name}"
-									iptables -I OUTPUT 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									iptables -I OUTPUT 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${comment}" -j DROP
 									;;
 								forward)
 									log "Applying FORWARD rule for IPv4 ipset: ${ipset_name}"
-									iptables -I FORWARD 1 -m set --match-set "${ipset_name}" src -m comment --comment "${IPTABLES_COMMENT}" -j DROP
-									iptables -I FORWARD 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									iptables -I FORWARD 1 -m set --match-set "${ipset_name}" src -m comment --comment "${comment}" -j DROP
+									iptables -I FORWARD 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${comment}" -j DROP
 									;;
 							esac
 						else
@@ -214,16 +223,16 @@ apply_main() {
 							case "${chain}" in
 								input)
 									log "Applying INPUT rule for IPv6 ipset: ${ipset_name}"
-									ip6tables -I INPUT 1 -m set --match-set "${ipset_name}" src -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									ip6tables -I INPUT 1 -m set --match-set "${ipset_name}" src -m comment --comment "${comment}" -j DROP
 									;;
 								output)
 									log "Applying OUTPUT rule for IPv6 ipset: ${ipset_name}"
-									ip6tables -I OUTPUT 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									ip6tables -I OUTPUT 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${comment}" -j DROP
 									;;
 								forward)
 									log "Applying FORWARD rule for IPv6 ipset: ${ipset_name}"
-									ip6tables -I FORWARD 1 -m set --match-set "${ipset_name}" src -m comment --comment "${IPTABLES_COMMENT}" -j DROP
-									ip6tables -I FORWARD 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${IPTABLES_COMMENT}" -j DROP
+									ip6tables -I FORWARD 1 -m set --match-set "${ipset_name}" src -m comment --comment "${comment}" -j DROP
+									ip6tables -I FORWARD 1 -m set --match-set "${ipset_name}" dst -m comment --comment "${comment}" -j DROP
 									;;
 							esac
 						else
@@ -234,8 +243,337 @@ apply_main() {
 			done
 		done
 	done
+}
+
+restore_ipsets_from_save() {
+	log "Starting application of firewall rules..."
+
+	log "Attempting to restore ipsets from save file..."
+	if [[ -f "${IPSET_SAVE_FILE}" ]]; then
+		if ipset restore -exist < "${IPSET_SAVE_FILE}"; then
+			log "Successfully restored ipsets."
+		else
+			log "ERROR: Failed to restore ipsets from ${IPSET_SAVE_FILE}. File might be corrupt."
+			return 1
+		fi
+	else
+		log "File not found at ${IPSET_SAVE_FILE}. Exiting."
+		return 2
+	fi
+}
+
+apply_from_config() {
+	local config_file="$1"
+	local comment="$2"
+	local mode_label="$3"
+	local allow_missing_save="${4:-false}"
+	local restore_status
+
+	if restore_ipsets_from_save; then
+		:
+	else
+		restore_status=$?
+		if [[ "${restore_status}" -eq 2 ]] && [[ "${allow_missing_save}" == "true" ]]; then
+			log "Continuing without saved ipsets for temporary candidate rules."
+		elif [[ "${restore_status}" -eq 2 ]]; then
+			return 2
+		else
+			return 1
+		fi
+	fi
+
+	log "Cleaning up old firewall rules..."
+	cleanup_firewall_rules "${IPTABLES_COMMENT}"
+	cleanup_firewall_rules "${IPTABLES_TRY_COMMENT}"
+
+	apply_config_rules "${config_file}" "${comment}" "${mode_label}" || return 1
 
 	log "Firewall rule application finished."
+}
+
+ensure_ipset_from_cache() {
+	local ipset_name="$1"
+	local family="$2"
+	local ip_list_file="$3"
+	local tmp_ipset_name
+
+	if ipset list "${ipset_name}" &>/dev/null; then
+		return 0
+	fi
+	if [[ ! -s "${ip_list_file}" ]]; then
+		log "ERROR: Missing IP list ${ip_list_file}; cannot prepare ${ipset_name}."
+		return 1
+	fi
+
+	log "Preparing missing candidate ipset: ${ipset_name}"
+	tmp_ipset_name="${ipset_name}_try_tmp"
+	ipset create "${tmp_ipset_name}" hash:net family "${family}" -exist
+	ipset flush "${tmp_ipset_name}"
+	while read -r cidr; do
+		ipset add "${tmp_ipset_name}" "${cidr}" -exist
+	done < "${ip_list_file}"
+	ipset rename "${tmp_ipset_name}" "${ipset_name}"
+}
+
+ensure_candidate_ipsets() {
+	local config_file="$1"
+	local ip_list_file
+	local ipset_name
+	local should_download
+	local file_age_days
+
+	mkdir -p "${CACHE_DIR}"
+
+	declare -a config_lines
+	read_config_lines "${config_file}"
+
+	for line in "${config_lines[@]}"; do
+		if ! parse_config_entry "${line}"; then
+			continue
+		fi
+
+		for country in ${entry_countries}; do
+			for ip_version in ${entry_ip_versions}; do
+				if [[ "${ip_version}" == "v4" ]]; then
+					ip_list_file="${CACHE_DIR}/${country}.zone.v4"
+					ipset_name="${IPSET_PREFIX}${country}_v4"
+					should_download=false
+
+					if ! ipset list "${ipset_name}" &>/dev/null; then
+						if [[ ! -f "${ip_list_file}" ]]; then
+							log "IPv4 list for '${country}' not found. Scheduling download."
+							should_download=true
+						else
+							file_age_days=$(( ($(date +%s) - $(date +%s -r "${ip_list_file}")) / 86400 ))
+							if [[ "${file_age_days}" -ge "${MAX_FILE_AGE_DAYS}" ]]; then
+								log "IPv4 list for '${country}' is old. Scheduling re-download."
+								should_download=true
+							fi
+						fi
+
+						if [[ "${should_download}" == true ]]; then
+							log "Downloading IPv4 list for ${country}..."
+							curl -fsSL --compressed "${IP_SOURCE_URL}/${country}.zone" -o "${ip_list_file}" || {
+								log "ERROR: Failed to download IPv4 list for ${country}."
+								return 1
+							}
+						fi
+
+						ensure_ipset_from_cache "${ipset_name}" inet "${ip_list_file}" || return 1
+					fi
+				elif [[ "${ip_version}" == "v6" ]]; then
+					ip_list_file="${CACHE_DIR}/${country}.zone.v6"
+					ipset_name="${IPSET_PREFIX}${country}_v6"
+					should_download=false
+
+					if ! ipset list "${ipset_name}" &>/dev/null; then
+						if [[ ! -f "${ip_list_file}" ]]; then
+							log "IPv6 list for '${country}' not found. Scheduling download."
+							should_download=true
+						else
+							file_age_days=$(( ($(date +%s) - $(date +%s -r "${ip_list_file}")) / 86400 ))
+							if [[ "${file_age_days}" -ge "${MAX_FILE_AGE_DAYS}" ]]; then
+								log "IPv6 list for '${country}' is old. Scheduling re-download."
+								should_download=true
+							fi
+						fi
+
+						if [[ "${should_download}" == true ]]; then
+							log "Downloading IPv6 list for ${country}..."
+							curl -fsSL --compressed "${IP6_SOURCE_URL}/${country}.zone" -o "${ip_list_file}" || {
+								log "ERROR: Failed to download IPv6 list for ${country}."
+								return 1
+							}
+						fi
+
+						ensure_ipset_from_cache "${ipset_name}" inet6 "${ip_list_file}" || return 1
+					fi
+				fi
+			done
+		done
+	done
+}
+
+apply_main() {
+	COMMAND_NAME="country-block apply"
+	local apply_status
+
+	if [[ "${EUID}" -ne 0 ]]; then
+		log "ERROR: This command must be run as root."
+		return 1
+	fi
+
+	if [[ -z "${COUNTRY_BLOCK_SKIP_LOCK:-}" ]]; then
+		acquire_lock
+	fi
+
+	if apply_from_config "${CONFIG_FILE}" "${IPTABLES_COMMENT}" "new"; then
+		return 0
+	fi
+	apply_status=$?
+	if [[ "${apply_status}" -eq 2 ]]; then
+		return 0
+	fi
+	return "${apply_status}"
+}
+
+restore_try_firewall() {
+	if [[ -n "${TRY_IPTABLES_SAVE:-}" ]] && [[ -f "${TRY_IPTABLES_SAVE}" ]]; then
+		iptables-restore < "${TRY_IPTABLES_SAVE}" || true
+	fi
+	if [[ -n "${TRY_IP6TABLES_SAVE:-}" ]] && [[ -f "${TRY_IP6TABLES_SAVE}" ]]; then
+		ip6tables-restore < "${TRY_IP6TABLES_SAVE}" || true
+	fi
+}
+
+cleanup_try_files() {
+	rm -f "${TRY_IPTABLES_SAVE:-}" "${TRY_IP6TABLES_SAVE:-}" "${TRY_EDIT_CONFIG:-}"
+	if [[ -n "${TRY_TMPDIR:-}" ]]; then
+		rmdir "${TRY_TMPDIR}" 2>/dev/null || true
+	fi
+	if [[ -n "${TRY_EDIT_TMPDIR:-}" ]]; then
+		rmdir "${TRY_EDIT_TMPDIR}" 2>/dev/null || true
+	fi
+}
+
+try_abort() {
+	log "Confirmation not received. Restoring previous firewall state."
+	restore_try_firewall
+	cleanup_try_files
+	exit 1
+}
+
+try_main() {
+	COMMAND_NAME="country-block try"
+	local candidate_config=""
+	local timeout="${DEFAULT_TRY_TIMEOUT}"
+	local answer=""
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--config)
+				if [[ $# -lt 2 ]]; then
+					usage >&2
+					return 2
+				fi
+				candidate_config="$2"
+				shift 2
+				;;
+			--timeout)
+				if [[ $# -lt 2 ]]; then
+					usage >&2
+					return 2
+				fi
+				timeout="$2"
+				shift 2
+				;;
+			*)
+				usage >&2
+				return 2
+				;;
+		esac
+	done
+
+	if [[ "${EUID}" -ne 0 ]]; then
+		log "ERROR: This command must be run as root."
+		return 1
+	fi
+	if [[ -z "${candidate_config}" ]]; then
+		log "ERROR: try requires --config FILE."
+		return 2
+	fi
+	if [[ ! -f "${candidate_config}" ]]; then
+		log "ERROR: Candidate config not found at ${candidate_config}."
+		return 1
+	fi
+	validate_timeout "${timeout}" || return 2
+
+	acquire_lock
+
+	TRY_TMPDIR="$(mktemp -d)"
+	TRY_IPTABLES_SAVE="${TRY_TMPDIR}/iptables.save"
+	TRY_IP6TABLES_SAVE="${TRY_TMPDIR}/ip6tables.save"
+	trap try_abort INT TERM HUP
+
+	log "Preparing ipsets required by candidate config."
+	ensure_candidate_ipsets "${candidate_config}" || {
+		cleanup_try_files
+		return 1
+	}
+
+	log "Saving current firewall state."
+	iptables-save > "${TRY_IPTABLES_SAVE}"
+	ip6tables-save > "${TRY_IP6TABLES_SAVE}"
+
+	log "Temporarily applying candidate config."
+	if ! apply_from_config "${candidate_config}" "${IPTABLES_TRY_COMMENT}" "candidate" true; then
+		try_abort
+	fi
+
+	log "Candidate rules are active for ${timeout} seconds."
+	log "Type 'yes' and press Enter to keep these rules and install the candidate config."
+	printf "Confirm country-block rules within %s seconds [yes/NO]: " "${timeout}"
+	if read -r -t "${timeout}" answer && [[ "${answer}" == "yes" ]]; then
+		trap - INT TERM HUP
+		log "Confirmation received. Keeping candidate rules."
+		cleanup_firewall_rules "${IPTABLES_TRY_COMMENT}"
+		promote_config "${candidate_config}"
+		log "Saving confirmed ipset state for persistence."
+		ipset save > "${IPSET_SAVE_FILE}"
+		COUNTRY_BLOCK_SKIP_LOCK=1 apply_main
+		COMMAND_NAME="country-block try"
+		cleanup_try_files
+		log "Try command finished."
+		return 0
+	fi
+
+	try_abort
+}
+
+edit_main() {
+	COMMAND_NAME="country-block edit"
+	local timeout="${DEFAULT_TRY_TIMEOUT}"
+	local editor="${EDITOR:-vi}"
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--timeout)
+				if [[ $# -lt 2 ]]; then
+					usage >&2
+					return 2
+				fi
+				timeout="$2"
+				shift 2
+				;;
+			*)
+				usage >&2
+				return 2
+				;;
+		esac
+	done
+
+	if [[ "${EUID}" -ne 0 ]]; then
+		log "ERROR: This command must be run as root."
+		return 1
+	fi
+	validate_timeout "${timeout}" || return 2
+	if [[ ! -f "${CONFIG_FILE}" ]]; then
+		log "ERROR: Configuration file not found at ${CONFIG_FILE}."
+		return 1
+	fi
+
+	TRY_EDIT_TMPDIR="$(mktemp -d)"
+	TRY_EDIT_CONFIG="${TRY_EDIT_TMPDIR}/config.conf"
+	cp "${CONFIG_FILE}" "${TRY_EDIT_CONFIG}"
+
+	log "Opening temporary config with ${editor}."
+	if ! "${editor}" "${TRY_EDIT_CONFIG}"; then
+		log "ERROR: Editor exited with an error. No changes were installed."
+		cleanup_try_files
+		return 1
+	fi
+
+	try_main --config "${TRY_EDIT_CONFIG}" --timeout "${timeout}"
 }
 
 update_main() {
@@ -261,7 +599,7 @@ update_main() {
 	COMMAND_NAME="country-block update"
 
 	declare -a config_lines
-	read_config_lines
+	read_config_lines "${CONFIG_FILE}"
 
 	declare -A required_countries
 	for line in "${config_lines[@]}"; do
@@ -425,6 +763,14 @@ case "${1:-}" in
 			exit 2
 		fi
 		update_main
+		;;
+	try)
+		shift
+		try_main "$@"
+		;;
+	edit)
+		shift
+		edit_main "$@"
 		;;
 	-h|--help|help)
 		usage

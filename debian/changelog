@@ -1,3 +1,12 @@
+country-block (0.3.0) unstable; urgency=medium
+
+  * Add safe interactive editing with country-block edit.
+  * Add country-block try for temporary candidate config application with timed
+    firewall rollback.
+  * Document safer configuration workflows for remote systems.
+
+ -- Nik Unknown <266516374+newfullname@users.noreply.github.com>  Wed, 20 May 2026 00:00:00 +0300
+
 country-block (0.2.0) unstable; urgency=medium
 
   * Replace separate apply/update scripts with the country-block subcommand CLI.

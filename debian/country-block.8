@@ -4,6 +4,7 @@ country-block \- manage country-based firewall blocking
 .SH SYNOPSIS
 .B country-block
 .I command
+.RI [ options ]
 .SH DESCRIPTION
 .B country-block
 maintains ipsets from country IP block lists and applies iptables and
@@ -22,6 +23,40 @@ and apply firewall rules from the configuration file.
 Download current country IP block lists for the configured countries, update
 the matching ipsets, save the resulting ipset state, and run
 .BR "country-block apply" .
+.TP
+.B try --config FILE
+Temporarily apply rules from a candidate configuration file. The previous
+iptables and ip6tables state is saved first, and any missing candidate ipsets
+are prepared before the rules are tested. The command asks for confirmation
+and installs
+.I FILE
+as
+.I /etc/country-block/config.conf
+only if the user types
+.B yes
+before the timeout expires. Otherwise, the previous firewall state is restored
+and the persistent configuration is left unchanged.
+.TP
+.B edit
+Copy
+.I /etc/country-block/config.conf
+to a temporary file, open it with
+.IR EDITOR " or " vi ,
+and run the same temporary confirmation flow as
+.BR try .
+This is the recommended interactive workflow on remote machines.
+.SH OPTIONS
+.TP
+.BI "--config " FILE
+Candidate configuration file for
+.BR try .
+.TP
+.BI "--timeout " SECONDS
+Confirmation timeout for
+.B try
+or
+.BR edit .
+The default is 120 seconds.
 .SH SYSTEMD UNITS
 .TP
 .B country-block.service
