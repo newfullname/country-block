@@ -18,10 +18,25 @@ IP lists are sourced from IPdeny:
 -   **Persistent**: Firewall rules and IP sets are correctly restored after a system reboot.
 -   **Automatic Updates**: Includes a systemd timer to automatically update IP lists weekly.
 
-## Debian Package
+## Debian and Ubuntu Installation
+
+For supported Debian and Ubuntu releases, install with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/newfullname/country-block/master/install-deb.sh | sudo bash
+```
+
+The installer adds the repository signing key to `/usr/share/keyrings`, configures
+the APT source, and installs the package.
+
+Supported Debian releases: `bookworm`, `trixie`.
+Supported Ubuntu releases: `jammy`, `noble`, `resolute`.
 
 Debian package installation instructions are available at:
 https://newfullname.github.io/debian/country-block.html
+
+Ubuntu package installation instructions are available at:
+https://newfullname.github.io/debian/country-block-ubuntu.html
 
 ## Local Source Installation
 
