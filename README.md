@@ -12,12 +12,12 @@ IP lists are sourced from IPdeny:
 
 ## Features
 
--   **Configuration-Driven**: Easily manage which countries to block in a simple text file.
+-   **Rules-Driven**: Easily manage which countries to block in a simple text file.
 -   **Directional Rules**: Block traffic on a per-country basis for `input`, `output`, or `both`.
 -   **Efficient IP Management**: Uses `ipset` to handle thousands of IP ranges without slowing down `iptables`.
--   **Persistent**: Firewall rules and IP sets are correctly restored after a system reboot.
--   **Automatic Updates**: Includes a systemd timer to automatically update IP lists weekly.
--   **Safe Editing**: Test configuration changes temporarily before making them persistent.
+-   **Optional Persistence**: Includes a systemd service to restore confirmed rules after reboot.
+-   **Optional Automatic Updates**: Includes a systemd timer to refresh IP lists and apply updated rules weekly.
+-   **Safe Editing**: Test rules temporarily before making them persistent.
 
 ## Debian and Ubuntu Installation
 
@@ -71,15 +71,15 @@ sudo make install
 This will:
 -   Create the necessary directories (`/etc/country-block`, `/var/cache/country-block`).
 -   Copy the `country-block` command to `/usr/local/sbin/`.
--   Copy a default configuration file to `/etc/country-block/config.conf` (if it doesn't already exist).
--   Install and enable `country-block.service` to apply rules on boot.
--   Install `country-block-update.service` and enable/start `country-block.timer` for weekly updates.
+-   Copy a default rules file to `/etc/country-block/rules.conf` (if it doesn't already exist).
+-   Install `country-block.service`, `country-block-update.service`, and `country-block.timer`.
+-   Leave all systemd units disabled and stopped until you opt in.
 
-## Configuration
+## Rules
 
-After installation, configure which countries you want to block. For remote machines, prefer the safe editor because it tests the new rules before replacing the persistent config.
+After installation, configure which countries you want to block. For remote machines, prefer the safe editor because it tests the new rules before replacing the persistent rules file.
 
-1.  **Edit the configuration file:**
+1.  **Edit the rules file:**
     ```bash
     sudo country-block edit
     ```
@@ -90,7 +90,7 @@ After installation, configure which countries you want to block. For remote mach
 - `<chains>`: Comma-separated list of chains: `input`, `output`, `forward`, or `*` for all
 - `<ip-versions>`: Comma-separated list: `v4`, `v6`, or `*` for both
 
-**Example `config.conf`:**
+**Example `rules.conf`:**
 ```
 # Block all traffic (all chains) for Russia and Iran, both IPv4 and IPv6
 ru,ir * *
@@ -101,23 +101,54 @@ cn input v4
 
 ## Usage
 
-Once you have added your rules to the configuration file, run the update command for the first time to download the IP lists and apply the rules.
+Once you have added your rules, test them with rollback before making persistence decisions:
 
 ```bash
-sudo country-block update
+sudo country-block try
 ```
 
-The first execution downloads the latest country lists, updates the ipsets, and applies the matching firewall rules. Subsequent updates are handled automatically by `country-block.timer`; rerun `sudo country-block update` if you change the configuration and need to push the new rules immediately.
+If you are confident the rules are safe and want a direct non-interactive refresh and apply, use `sync`:
+
+```bash
+sudo country-block sync
+```
+
+`sync` runs `update` and then `apply`. Use the commands separately when you want only one half of that workflow:
+
+```bash
+sudo country-block update  # refresh downloaded lists and /var/cache/country-block/ipsets.save only
+sudo country-block apply   # restore cached ipsets and apply firewall rules
+```
+
+Rerun `sudo country-block sync` if you change the rules file and need to refresh lists and push the new rules immediately.
+
+Check the current rules, cache, live firewall rules, and systemd units with:
+
+```bash
+sudo country-block status
+```
+
+After you have confirmed the rules work, enable boot-time restore if you want rules to persist across reboots:
+
+```bash
+sudo systemctl enable country-block.service
+```
+
+Enable weekly list refreshes and live rule updates if you want updates to run automatically:
+
+```bash
+sudo systemctl enable --now country-block.timer
+```
 
 ### Safe Changes
 
-Use `edit` for interactive configuration changes:
+Use `edit` for interactive rules changes:
 
 ```bash
 sudo country-block edit
 ```
 
-The command opens a temporary copy of `/etc/country-block/config.conf` with `${EDITOR:-vi}`, prepares any missing country ipsets, applies the edited rules temporarily, and asks you to type `yes` within 120 seconds. If you confirm, the temporary file is installed as the persistent config. If you disconnect, press Ctrl-C, or do not confirm in time, the previous firewall state is restored and the persistent config is left unchanged.
+The command opens a temporary copy of `/etc/country-block/rules.conf` with `${EDITOR:-nano}`, prepares any missing country ipsets, applies the edited rules temporarily, and asks you to type `yes` within 120 seconds. If you confirm, the temporary file is installed as the persistent rules file. If you disconnect, press Ctrl-C, or do not confirm in time, the previous firewall state is restored and the persistent rules file is left unchanged.
 
 You can change the confirmation window:
 
@@ -125,16 +156,30 @@ You can change the confirmation window:
 sudo country-block edit --timeout 300
 ```
 
-For generated configs or automation, use `try` directly:
+To test the current persistent rules with rollback, run `try` directly:
+
+```bash
+sudo country-block try --timeout 120
+```
+
+For generated rules files or automation, pass a candidate file. Unlike plain `apply`, `try` may prepare or download missing candidate ipsets before temporarily applying rules. It does not install the candidate file; use `edit` or replace `/etc/country-block/rules.conf` explicitly when you want to save rules.
 
 ```bash
 sudo country-block try --config ./candidate.conf --timeout 120
 ```
 
-`apply` remains a direct non-interactive command. It is intended for systemd and for administrators who explicitly want to apply the current persistent config immediately.
+`apply` remains a direct non-interactive command. It is intended for systemd and for administrators who explicitly want to apply the current persistent rules immediately.
+
+To remove live country-block firewall rules without uninstalling the package:
+
+```bash
+sudo country-block clear
+```
+
+`clear` removes only country-block managed iptables and ip6tables rules. It does not delete downloaded lists or the saved ipset cache.
 
 ## Systemd Units
 
-- `country-block.service` runs `country-block apply` during boot to restore cached ipsets and firewall rules. It is enabled by default when installed.
-- `country-block.timer` runs weekly and triggers `country-block-update.service`. It is enabled and started by default when installed.
-- `country-block-update.service` is a oneshot helper used by the timer. It runs `country-block update` and is not enabled directly.
+- `country-block.service` runs `country-block apply` during boot to restore cached ipsets and firewall rules. It is installed disabled by default so package installation and upgrades do not apply firewall rules automatically.
+- `country-block.timer` runs weekly and triggers `country-block-update.service`. It is installed disabled and stopped by default so package installation and upgrades do not refresh or apply rules automatically.
+- `country-block-update.service` is a oneshot helper used by the timer. It runs `country-block sync`, which refreshes the saved ipset cache and applies the updated firewall rules.

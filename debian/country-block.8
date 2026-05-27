@@ -1,4 +1,4 @@
-.TH COUNTRY-BLOCK 8 "March 2026" "country-block" "System Administration"
+.TH COUNTRY-BLOCK 8 "May 2026" "country-block" "System Administration"
 .SH NAME
 country-block \- manage country-based firewall blocking
 .SH SYNOPSIS
@@ -9,7 +9,7 @@ country-block \- manage country-based firewall blocking
 .B country-block
 maintains ipsets from country IP block lists and applies iptables and
 ip6tables rules based on
-.IR /etc/country-block/config.conf .
+.IR /etc/country-block/rules.conf .
 .PP
 The command must be run as root when changing firewall state.
 .SH COMMANDS
@@ -17,39 +17,63 @@ The command must be run as root when changing firewall state.
 .B apply
 Restore cached ipsets from
 .I /var/cache/country-block/ipsets.save
-and apply firewall rules from the configuration file.
+and apply firewall rules from the rules file.
 .TP
 .B update
-Download current country IP block lists for the configured countries, update
-the matching ipsets, save the resulting ipset state, and run
+Download current country IP block lists for the configured countries and
+refresh
+.IR /var/cache/country-block/ipsets.save .
+This command does not change live firewall rules.
+.TP
+.B sync
+Run
+.B country-block update
+and then
 .BR "country-block apply" .
 .TP
+.B status
+Show a read-only summary of the rules file, saved ipset cache, downloaded
+lists, live managed firewall rules, and systemd unit state. The command exits
+successfully even when it reports warnings or inconsistencies.
+.TP
+.B clear
+Remove live iptables and ip6tables rules managed by
+.BR country-block .
+Downloaded lists and the saved ipset cache are left in place.
+.TP
+.B try
+Prepare any missing ipsets for
+.IR /etc/country-block/rules.conf ,
+downloading country lists if needed, and temporarily apply its rules. The
+previous iptables and ip6tables state is saved before rules are tested. If
+confirmed, the rules are kept. Otherwise, the previous firewall state is
+restored.
+.TP
 .B try --config FILE
-Temporarily apply rules from a candidate configuration file. The previous
-iptables and ip6tables state is saved first, and any missing candidate ipsets
-are prepared before the rules are tested. The command asks for confirmation
-and installs
-.I FILE
-as
-.I /etc/country-block/config.conf
-only if the user types
-.B yes
-before the timeout expires. Otherwise, the previous firewall state is restored
-and the persistent configuration is left unchanged.
+Prepare any missing candidate ipsets, downloading country lists if needed, and
+temporarily apply rules from a candidate rules file. If confirmed, the rules
+are kept active. The candidate file is not installed. Otherwise, the previous
+firewall state is restored.
 .TP
 .B edit
 Copy
-.I /etc/country-block/config.conf
+.I /etc/country-block/rules.conf
 to a temporary file, open it with
-.IR EDITOR " or " vi ,
+.IR EDITOR " or " nano ,
 and run the same temporary confirmation flow as
 .BR try .
+If confirmed, the edited temporary file is installed as
+.IR /etc/country-block/rules.conf .
 This is the recommended interactive workflow on remote machines.
 .SH OPTIONS
 .TP
 .BI "--config " FILE
-Candidate configuration file for
+Candidate rules file for
 .BR try .
+When omitted,
+.B try
+uses
+.IR /etc/country-block/rules.conf .
 .TP
 .BI "--timeout " SECONDS
 Confirmation timeout for
@@ -62,24 +86,27 @@ The default is 120 seconds.
 .B country-block.service
 Runs
 .B country-block apply
-during boot to restore cached ipsets and firewall rules. It is enabled by
-default when the package is installed.
+during boot to restore cached ipsets and firewall rules. It is installed
+disabled by default so package installation and upgrades do not apply firewall
+rules automatically. Enable it only after confirming the configured rules work.
 .TP
 .B country-block.timer
 Runs weekly and triggers
 .BR country-block-update.service .
-It is enabled and started by default when the package is installed.
+It is installed disabled and stopped by default so package installation and
+upgrades do not refresh or apply rules automatically. Enable it only if
+automatic live updates are wanted.
 .TP
 .B country-block-update.service
 Oneshot helper used by
 .BR country-block.timer .
 It runs
-.B country-block update
-and is not enabled directly.
+.B country-block sync
+to refresh the saved ipset cache and apply the updated firewall rules.
 .SH FILES
 .TP
-.I /etc/country-block/config.conf
-Country, chain, and IP-version configuration.
+.I /etc/country-block/rules.conf
+Country, chain, and IP-version rules.
 .TP
 .I /var/cache/country-block/
 Downloaded country lists and saved ipset state.

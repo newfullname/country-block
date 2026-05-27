@@ -9,13 +9,13 @@ SYSTEMD_DIR := /etc/systemd/system
 
 # Script and file names
 CLI_SCRIPT := country-block
-CONFIG_FILE := config.conf.example
+CONFIG_FILE := rules.conf.example
 SERVICE_TEMPLATE := country-block.service.template
 UPDATE_SERVICE_TEMPLATE := country-block-update.service.template
 UPDATE_TIMER_FILE := country-block.timer
 SERVICE_FILE := country-block.service
 UPDATE_SERVICE_FILE := country-block-update.service
-CONFIG_TARGET_FILE := $(ETC_DIR)/config.conf
+CONFIG_TARGET_FILE := $(ETC_DIR)/rules.conf
 
 # Metadata for rules
 IPSET_PREFIX := country_
@@ -35,7 +35,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  install      Install the country-block scripts, service, and config."
+	@echo "  install      Install the country-block scripts, service, and rules file."
 	@echo "  uninstall    Remove all components of the country-block system."
 	@echo "  clean        Remove generated files and Debian package build artifacts."
 	@echo "  deb          Build the Debian binary package."
@@ -56,7 +56,7 @@ install: $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
 	@echo "--> Installing scripts to $(SBIN_DIR)..."
 	@install -m 755 $(CLI_SCRIPT) "$(SBIN_DIR)/"
 	
-	@echo "--> Installing configuration file to $(ETC_DIR)..."
+	@echo "--> Installing rules file to $(ETC_DIR)..."
 	@if [ ! -f "$(CONFIG_TARGET_FILE)" ]; then \
 		install -m 644 -o root -g root $(CONFIG_FILE) "$(CONFIG_TARGET_FILE)"; \
 		echo "    $(CONFIG_TARGET_FILE) created."; \
@@ -69,10 +69,7 @@ install: $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
 	@install -m 644 $(UPDATE_SERVICE_FILE) "$(SYSTEMD_DIR)/"
 	@install -m 644 $(UPDATE_TIMER_FILE) "$(SYSTEMD_DIR)/"
 	@systemctl daemon-reload
-	@echo "--> Enabling country-block service to run on boot..."
-	@systemctl enable $(SERVICE_FILE)
-	@echo "--> Enabling country-block timer for weekly updates..."
-	@systemctl enable --now $(UPDATE_TIMER_FILE)
+	@echo "--> Systemd units installed but not enabled or started."
 	@rm -f $(SERVICE_FILE) # Clean up generated file
 	@rm -f $(UPDATE_SERVICE_FILE) # Clean up generated file
 	
@@ -81,11 +78,16 @@ install: $(SERVICE_FILE) $(UPDATE_SERVICE_FILE)
 	@echo "Installation complete!"
 	@echo ""
 	@echo "Next steps:"
-	@echo "1. Edit the configuration file with the countries to block:"
-	@echo "   sudo nano $(CONFIG_TARGET_FILE)"
+	@echo "1. Safely edit and test the rules file:"
+	@echo "   sudo $(CLI_SCRIPT) edit"
 	@echo ""
-	@echo "2. Run the update script for the first time:"
-	@echo "   sudo $(SBIN_DIR)/$(CLI_SCRIPT) update"
+	@echo "2. Or edit manually and test with rollback:"
+	@echo "   sudo nano rules.conf"
+	@echo "   sudo $(CLI_SCRIPT) try"
+	@echo ""
+	@echo "3. After confirming the rules work, enable persistence if wanted:"
+	@echo "   sudo systemctl enable $(SERVICE_FILE)"
+	@echo "   sudo systemctl enable --now $(UPDATE_TIMER_FILE)"
 	@echo "--------------------------------------------------------"
 	@echo ""
 
@@ -127,7 +129,7 @@ uninstall:
 	@echo "--> Removing cache directory..."
 	@rm -rf "$(CACHE_DIR)"
 
-	@echo "--> Handling configuration file $(CONFIG_TARGET_FILE)..."
+	@echo "--> Handling rules file $(CONFIG_TARGET_FILE)..."
 	@if [ -f "$(CONFIG_TARGET_FILE)" ]; then \
 		if cmp -s "$(CONFIG_TARGET_FILE)" "$(CONFIG_FILE)"; then \
 			echo "    $(CONFIG_TARGET_FILE) is unchanged, deleting."; \
@@ -139,7 +141,7 @@ uninstall:
 		echo "    $(CONFIG_TARGET_FILE) does not exist, skipping."; \
 	fi
 
-	@echo "--> Removing configuration directory if empty..."
+	@echo "--> Removing country-block directory if empty..."
 	@rmdir --ignore-fail-on-non-empty "$(ETC_DIR)" 2>/dev/null || true
 	@echo ""
 	@echo "Uninstallation complete."

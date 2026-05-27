@@ -1,8 +1,8 @@
 [Unit]
-Description=Update country-block IP sets and firewall rules
+Description=Refresh and apply country-block IP sets
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=@PREFIX@/sbin/country-block update
+ExecStart=@PREFIX@/sbin/country-block sync

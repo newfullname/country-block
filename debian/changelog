@@ -1,3 +1,17 @@
+country-block (0.4.0) unstable; urgency=medium
+
+  * Stop applying firewall rules automatically during package install or
+    upgrade.
+  * Split data refresh from firewall application with the new sync command.
+  * Add country-block status for read-only consistency checks.
+  * Add country-block clear for removing live managed firewall rules.
+  * Allow country-block try to test the current rules file by default.
+  * Rename config.conf to rules.conf.
+  * Install systemd units disabled and stopped by default.
+  * Warn users when boot restore or weekly updates are not enabled.
+
+ -- Nik Unknown <266516374+newfullname@users.noreply.github.com>  Tue, 26 May 2026 22:33:02 +0300
+
 country-block (0.3.0) unstable; urgency=medium
 
   * Add safe interactive editing with country-block edit.

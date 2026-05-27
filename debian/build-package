@@ -10,8 +10,14 @@ VERSION=$(dpkg-parsechangelog --show-field Version)
 # Delete already built package in parent dir with exactly same version
 rm -rf "$PREFIX/../country-block_${VERSION}_all.deb"
 
-# Delete leftovers
+# Delete leftovers, including debhelper-generated maintainer script snippets.
 rm -rf "${PREFIX}/country-block"
+rm -rf "${PREFIX}/.debhelper"
+rm -rf "${PREFIX}/debhelper-build-stamp"
+rm -rf "${PREFIX}/files"
+rm -rf "${PREFIX}"/*.debhelper
+rm -rf "${PREFIX}"/*.substvars
+rm -rf "${PREFIX}"/*.debhelper.log
 
 # Build
 dpkg-buildpackage -us -uc

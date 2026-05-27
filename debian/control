@@ -14,6 +14,6 @@ Description: block network traffic by country
  iptables and ip6tables rules for the configured countries, chains, and IP
  versions.
  .
- The package installs a command-line helper, a persistent systemd service for
- restoring firewall rules, and scheduled refresh jobs for keeping country lists
- current.
+ The package installs a command-line helper, an optional systemd service for
+ restoring firewall rules, and an optional scheduled refresh job for keeping
+ country lists current.
